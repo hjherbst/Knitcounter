@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Zähler">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Reihenzähler</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    .wake-lock-status {
+      position: fixed;
+      top: max(12px, env(safe-area-inset-top));
+      right: max(16px, env(safe-area-inset-right));
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #888;
+      transition: color 0.3s;
+    }
+
+    .wake-lock-status.active {
+      color: #4ade80;
+    }
+
+    .wake-lock-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #555;
+      transition: background 0.3s;
+    }
+
+    .wake-lock-status.active .wake-lock-dot {
+      background: #4ade80;
+    }
+
+    .counter-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10vh;
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+      flex: 1;
+    }
+
+    .label {
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      color: #888;
+      font-weight: 500;
+    }
+
+    .counter-display {
+      font-size: clamp(80px, 25vw, 160px);
+      font-weight: 200;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      color: #fff;
+      min-width: 2ch;
+      text-align: center;
+      transition: transform 0.1s ease;
+    }
+
+    .counter-display.bump-up {
+      transform: scale(1.08);
+    }
+
+    .counter-display.bump-down {
+      transform: scale(0.95);
+    }
+
+    .buttons {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+      transition: transform 0.1s ease, background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn:active {
+      transform: scale(0.92);
+    }
+
+    .btn-minus {
+      width: 72px;
+      height: 72px;
+      background: #2d2d44;
+      color: #ccc;
+      font-size: 32px;
+      font-weight: 300;
+    }
+
+    .btn-minus:active {
+      background: #3d3d55;
+    }
+
+    .btn-plus {
+      width: 110px;
+      height: 110px;
+      background: #6c5ce7;
+      color: #fff;
+      font-size: 48px;
+      font-weight: 300;
+      box-shadow: 0 4px 24px rgba(108, 92, 231, 0.4);
+    }
+
+    .btn-plus:active {
+      background: #7d6ef8;
+    }
+
+    .btn-reset {
+      width: 72px;
+      height: 72px;
+      background: #2d2d44;
+      color: #ccc;
+    }
+
+    .btn-reset:active {
+      background: #3d3d55;
+    }
+
+    .btn-reset svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    /* Confirmation overlay for reset */
+    .reset-confirm {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .reset-confirm.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .reset-dialog {
+      background: #2d2d44;
+      border-radius: 20px;
+      padding: 32px 28px;
+      text-align: center;
+      max-width: 300px;
+      width: 85%;
+    }
+
+    .reset-dialog p {
+      font-size: 18px;
+      margin-bottom: 24px;
+      color: #ddd;
+    }
+
+    .reset-dialog-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .reset-dialog-buttons button {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-cancel {
+      background: #3d3d55;
+      color: #ccc;
+    }
+
+    .btn-confirm-reset {
+      background: #e74c3c;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wake-lock-status" id="wakeLockStatus">
+    <div class="wake-lock-dot"></div>
+    <span id="wakeLockLabel">Display</span>
+  </div>
+
+  <div class="counter-container">
+    <div class="label">Reihe</div>
+    <div class="counter-display" id="counter">0</div>
+    <div class="buttons">
+      <button class="btn btn-minus" id="btnMinus" aria-label="Minus 1">&minus;</button>
+      <button class="btn btn-plus" id="btnPlus" aria-label="Plus 1">+</button>
+      <button class="btn btn-reset" id="btnReset" aria-label="Zurücksetzen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 1 3.2-6.8"/>
+          <polyline points="3 2 3 7 8 7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Reset confirmation dialog -->
+  <div class="reset-confirm" id="resetConfirm">
+    <div class="reset-dialog">
+      <p>Zähler auf 0 zurücksetzen?</p>
+      <div class="reset-dialog-buttons">
+        <button class="btn-cancel" id="btnCancelReset">Abbrechen</button>
+        <button class="btn-confirm-reset" id="btnConfirmReset">Zurücksetzen</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Counter ---
+    const counterEl = document.getElementById('counter');
+    const STORAGE_KEY = 'knitcounter_value';
+
+    let count = parseInt(localStorage.getItem(STORAGE_KEY), 10) || 0;
+    counterEl.textContent = count;
+
+    function updateCounter(newValue) {
+      count = Math.max(0, newValue);
+      counterEl.textContent = count;
+      localStorage.setItem(STORAGE_KEY, count);
+    }
+
+    function animateBump(direction) {
+      counterEl.classList.add(direction);
+      setTimeout(() => counterEl.classList.remove(direction), 120);
+    }
+
+    document.getElementById('btnPlus').addEventListener('click', () => {
+      updateCounter(count + 1);
+      animateBump('bump-up');
+    });
+
+    document.getElementById('btnMinus').addEventListener('click', () => {
+      if (count > 0) {
+        updateCounter(count - 1);
+        animateBump('bump-down');
+      }
+    });
+
+    // --- Reset with confirmation ---
+    const resetConfirm = document.getElementById('resetConfirm');
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+      if (count === 0) return;
+      resetConfirm.classList.add('visible');
+    });
+
+    document.getElementById('btnCancelReset').addEventListener('click', () => {
+      resetConfirm.classList.remove('visible');
+    });
+
+    document.getElementById('btnConfirmReset').addEventListener('click', () => {
+      updateCounter(0);
+      resetConfirm.classList.remove('visible');
+    });
+
+    // Close dialog on backdrop tap
+    resetConfirm.addEventListener('click', (e) => {
+      if (e.target === resetConfirm) {
+        resetConfirm.classList.remove('visible');
+      }
+    });
+
+    // --- Wake Lock (keep screen on) ---
+    const wakeLockStatus = document.getElementById('wakeLockStatus');
+    const wakeLockLabel = document.getElementById('wakeLockLabel');
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLockStatus.classList.add('active');
+          wakeLockLabel.textContent = 'Display an';
+
+          wakeLock.addEventListener('release', () => {
+            wakeLockStatus.classList.remove('active');
+            wakeLockLabel.textContent = 'Display';
+          });
+        } catch (err) {
+          wakeLockStatus.classList.remove('active');
+          wakeLockLabel.textContent = 'Display';
+        }
+      }
+    }
+
+    // Request wake lock on load
+    requestWakeLock();
+
+    // Re-acquire wake lock when page becomes visible again
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    });
+
+    // Prevent double-tap zoom on iOS
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, false);
+  </script>
+</body>
+</html>
