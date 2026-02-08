@@ -322,37 +322,163 @@
     });
 
     // --- Wake Lock (keep screen on) ---
+    // Uses native Wake Lock API (iOS 16.4+, modern browsers)
+    // Falls back to invisible video loop trick for older iOS versions
     const wakeLockStatus = document.getElementById('wakeLockStatus');
     const wakeLockLabel = document.getElementById('wakeLockLabel');
     let wakeLock = null;
+    let noSleepVideo = null;
+    let usingFallback = false;
 
+    function setWakeActive(active) {
+      if (active) {
+        wakeLockStatus.classList.add('active');
+        wakeLockLabel.textContent = 'Display an';
+      } else {
+        wakeLockStatus.classList.remove('active');
+        wakeLockLabel.textContent = 'Display';
+      }
+    }
+
+    // --- Fallback: silent video loop (works on all iOS versions) ---
+    function createNoSleepVideo() {
+      // Tiny MP4 with no audio — just enough to keep the screen awake
+      // This is the well-known NoSleep.js technique
+      const mp4Base64 = 'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAA'
+        + 'OBtZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlID'
+        + 'E0OCByMjY0MyA1YzY1NzA0IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyA'
+        + 'tIENvcHlsZWZ0IDIwMDMtMjAxNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4u'
+        + 'b3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVib'
+        + 'G9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9Ny'
+        + 'Bwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3Jhbmd'
+        + 'lPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBk'
+        + 'ZWFkem9uZT0yMSwyMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNld'
+        + 'D0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdG'
+        + 'hyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF'
+        + '5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJf'
+        + 'cHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlna'
+        + 'HRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbn'
+        + 'RfbWluPTEwIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29'
+        + 'rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAu'
+        + 'NjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwI'
+        + 'GFxPTE6MS4wMAAAAAADaWllYXMAAAAA/2QBZN/hAAAAC3Rya24AAABcZWR0'
+        + 'cwAAABRlbHN0AAAAAAAAAAEAAAAAAAAAFHNraXAAAAAIZnJlZQAAAAhtZGF0'
+        + 'AAAAMm1vb3YAAABsbXZoZAAAAAAAAAAAAAAAAAAAA+gAAAAAAAEAAAAAAQA'
+        + 'AAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAA'
+        + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAmHRyYWsAAABcdGt'
+        + 'oZAAAAA8AAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAA'
+        + 'AAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAABAAAAAAAAAAAAADAAFN'
+        + 'AAAB0bWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAADIAAAACAFXEAAAAAAAtaGR'
+        + 'scgAAAAAAAAAAc291bgAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx'
+        + '1cmwgAAAAAQAAAChzdGJsAAAAGHN0c2QAAAAAAAAAAQAAAA8AAAAAAAAAAA'
+        + 'AUc3RzegAAAAAAAAAAAAAUc3RjbwAAAAAAAAAA';
+
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('muted', '');
+      video.setAttribute('loop', '');
+      video.muted = true;
+      video.style.position = 'fixed';
+      video.style.top = '-1px';
+      video.style.left = '-1px';
+      video.style.width = '1px';
+      video.style.height = '1px';
+      video.style.opacity = '0.01';
+
+      // Use a minimal webm as primary, mp4 as fallback
+      const source = document.createElement('source');
+      try {
+        const binary = atob(mp4Base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'video/mp4' });
+        source.src = URL.createObjectURL(blob);
+      } catch (e) {
+        // Fallback: use data URI
+        source.src = 'data:video/mp4;base64,' + mp4Base64;
+      }
+      source.type = 'video/mp4';
+      video.appendChild(source);
+
+      return video;
+    }
+
+    function startNoSleepFallback() {
+      if (noSleepVideo) return;
+      usingFallback = true;
+      noSleepVideo = createNoSleepVideo();
+      document.body.appendChild(noSleepVideo);
+      const playPromise = noSleepVideo.play();
+      if (playPromise) {
+        playPromise.then(() => setWakeActive(true)).catch(() => {
+          // Autoplay blocked — need user interaction first
+          // We'll start it on the next button tap
+          setWakeActive(false);
+        });
+      }
+    }
+
+    function stopNoSleepFallback() {
+      if (noSleepVideo) {
+        noSleepVideo.pause();
+        noSleepVideo.remove();
+        noSleepVideo = null;
+        setWakeActive(false);
+      }
+    }
+
+    // Start fallback on first user interaction if autoplay was blocked
+    function ensureFallbackPlaying() {
+      if (usingFallback && noSleepVideo && noSleepVideo.paused) {
+        noSleepVideo.play().then(() => setWakeActive(true)).catch(() => {});
+      }
+    }
+
+    // --- Native Wake Lock API ---
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
         try {
           wakeLock = await navigator.wakeLock.request('screen');
-          wakeLockStatus.classList.add('active');
-          wakeLockLabel.textContent = 'Display an';
+          setWakeActive(true);
 
           wakeLock.addEventListener('release', () => {
-            wakeLockStatus.classList.remove('active');
-            wakeLockLabel.textContent = 'Display';
+            setWakeActive(false);
           });
+          return true;
         } catch (err) {
-          wakeLockStatus.classList.remove('active');
-          wakeLockLabel.textContent = 'Display';
+          // Wake Lock request failed — fall through to fallback
         }
+      }
+      return false;
+    }
+
+    // --- Initialize: try native first, then fallback ---
+    async function initWakeLock() {
+      const nativeOk = await requestWakeLock();
+      if (!nativeOk) {
+        startNoSleepFallback();
       }
     }
 
-    // Request wake lock on load
-    requestWakeLock();
+    initWakeLock();
 
-    // Re-acquire wake lock when page becomes visible again
+    // Re-acquire when page becomes visible again
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        requestWakeLock();
+        if (usingFallback) {
+          ensureFallbackPlaying();
+        } else {
+          requestWakeLock();
+        }
       }
     });
+
+    // Ensure fallback video plays after user interaction (autoplay policy)
+    document.addEventListener('click', () => {
+      if (usingFallback) ensureFallbackPlaying();
+    }, { once: false });
 
     // Prevent double-tap zoom on iOS
     let lastTouchEnd = 0;
