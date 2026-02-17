@@ -4,8 +4,8 @@
   "description": "Ein Spiel für Katzen - fang den Käfer!",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#1a3a1a",
+  "theme_color": "#1a3a1a",
   "orientation": "portrait",
   "icons": [
     {
