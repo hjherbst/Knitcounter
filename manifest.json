@@ -1,11 +1,11 @@
 {
-  "name": "Reihenzähler",
-  "short_name": "Zähler",
-  "description": "Einfacher Reihenzähler zum Stricken & Häkeln",
+  "name": "CatBug - Katzenspiel",
+  "short_name": "CatBug",
+  "description": "Ein Spiel für Katzen - fang den Käfer!",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#1a1a2e",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {
