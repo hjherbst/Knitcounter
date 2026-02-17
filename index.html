@@ -474,6 +474,11 @@
     document.addEventListener('click', () => { if (noSleepVideo && noSleepVideo.paused) startVideo(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') startVideo(); });
 
+    // --- Register service worker ---
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+
     // Prevent double-tap zoom
     let lastTouchEnd = 0;
     document.addEventListener('touchend', (e) => {
